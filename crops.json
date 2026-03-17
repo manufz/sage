@@ -1,0 +1,23 @@
+{
+  "tomato": {
+    "moisture": {"min": 55, "max": 80, "unit": "%"},
+    "temp":     {"min": 18, "max": 29, "unit": "C"},
+    "humidity": {"min": 60, "max": 80, "unit": "%"},
+    "light":    {"min": 600, "max": 900, "unit": "lux"},
+    "notes": "Sensitive to overwatering. Watch for early blight in humid conditions."
+  },
+  "lettuce": {
+    "moisture": {"min": 60, "max": 75, "unit": "%"},
+    "temp":     {"min": 15, "max": 22, "unit": "C"},
+    "humidity": {"min": 50, "max": 70, "unit": "%"},
+    "light":    {"min": 400, "max": 700, "unit": "lux"},
+    "notes": "Bolts quickly above 24C. Prefers cooler temps."
+  },
+  "basil": {
+    "moisture": {"min": 50, "max": 70, "unit": "%"},
+    "temp":     {"min": 20, "max": 30, "unit": "C"},
+    "humidity": {"min": 40, "max": 60, "unit": "%"},
+    "light":    {"min": 700, "max": 1000, "unit": "lux"},
+    "notes": "Very sensitive to cold. Needs strong light for flavour."
+  }
+}

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SAGE — Autonomous Greenhouse</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 24px; }
+    h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; color: #fff; }
+    .subtitle { font-size: 13px; color: #666; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .card { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 20px; }
+    .card h2 { font-size: 13px; font-weight: 500; color: #666; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .sensors { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .sensor { background: #1a1a1a; border-radius: 8px; padding: 14px; }
+    .sensor-label { font-size: 11px; color: #555; margin-bottom: 4px; }
+    .sensor-value { font-size: 26px; font-weight: 500; color: #fff; }
+    .sensor-unit { font-size: 12px; color: #555; margin-left: 3px; }
+    .sensor.warning .sensor-value { color: #f59e0b; }
+    .sensor.danger .sensor-value { color: #ef4444; }
+    .assessment { font-size: 15px; color: #fff; margin-bottom: 10px; line-height: 1.5; }
+    .assessment.running { color: #666; font-style: italic; }
+    .reasoning { font-size: 13px; color: #888; line-height: 1.6; }
+    .actions-log { display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; }
+    .action { background: #1a1a1a; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #aaa; display: flex; justify-content: space-between; }
+    .action .type { color: #4ade80; font-weight: 500; }
+    .action.alert .type { color: #f59e0b; }
+    .action.irrigation .type { color: #60a5fa; }
+    .scenarios { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { padding: 8px 16px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #ccc; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .btn:hover { background: #222; border-color: #555; color: #fff; }
+    .btn.active { background: #14532d; border-color: #4ade80; color: #4ade80; }
+    .btn.drought.active { background: #451a03; border-color: #f59e0b; color: #f59e0b; }
+    .btn.disease.active { background: #450a0a; border-color: #ef4444; color: #ef4444; }
+    .btn.overwater.active { background: #172554; border-color: #60a5fa; color: #60a5fa; }
+    .btn.heatstress.active { background: #450a0a; border-color: #f97316; color: #f97316; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    canvas { max-height: 160px; }
+    .full { grid-column: span 2; }
+    .ai-panel { display: grid; grid-template-columns: 180px 1fr; gap: 16px; align-items: start; }
+    .plant-image-wrap { position: relative; }
+    .plant-image { width: 180px; height: 180px; object-fit: cover; border-radius: 8px; border: 1px solid #222; background: #1a1a1a; display: block; }
+    .plant-label { font-size: 11px; color: #555; margin-top: 6px; text-align: center; }
+    .spinner { width: 16px; height: 16px; border: 2px solid #333; border-top-color: #4ade80; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; margin-right: 8px; vertical-align: middle; }
+    .actions-taken { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .action-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #1a1a1a; border: 1px solid #333; color: #aaa; }
+    .action-pill.irrigation { border-color: #60a5fa44; color: #60a5fa; }
+    .action-pill.alert { border-color: #f59e0b44; color: #f59e0b; }
+  </style>
+</head>
+<body>
+  <h1><span class="status-dot"></span>SAGE</h1>
+  <div class="subtitle">Sensor-Aware Greenhouse Engine — GB10 Local Inference</div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Live sensors</h2>
+      <div class="sensors">
+        <div class="sensor" id="s-moisture">
+          <div class="sensor-label">Soil moisture</div>
+          <div class="sensor-value">--<span class="sensor-unit">%</span></div>
+        </div>
+        <div class="sensor" id="s-temp">
+          <div class="sensor-label">Temperature</div>
+          <div class="sensor-value">--<span class="sensor-unit">°C</span></div>
+        </div>
+        <div class="sensor" id="s-humidity">
+          <div class="sensor-label">Humidity</div>
+          <div class="sensor-value">--<span class="sensor-unit">%</span></div>
+        </div>
+        <div class="sensor" id="s-light">
+          <div class="sensor-label">Light</div>
+          <div class="sensor-value">--<span class="sensor-unit">lux</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Trigger scenario</h2>
+      <div class="scenarios">
+        <button class="btn active" onclick="setScenario('normal', this)">Normal</button>
+        <button class="btn drought" onclick="setScenario('drought', this)">Drought</button>
+        <button class="btn disease" onclick="setScenario('disease', this)">Disease</button>
+        <button class="btn overwater" onclick="setScenario('overwater', this)">Overwater</button>
+        <button class="btn heatstress" onclick="setScenario('heatstress', this)">Heat stress</button>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h2>AI assessment</h2>
+      <div class="ai-panel">
+        <div class="plant-image-wrap">
+          <img class="plant-image" id="plant-img" src="/api/image" alt="Current plant"/>
+          <div class="plant-label" id="plant-label">Current camera frame</div>
+        </div>
+        <div>
+          <div class="assessment" id="assessment">Waiting for first agent cycle...</div>
+          <div class="reasoning" id="reasoning"></div>
+          <div class="actions-taken" id="actions-taken"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Moisture history</h2>
+      <canvas id="chart-moisture"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Temperature history</h2>
+      <canvas id="chart-temp"></canvas>
+    </div>
+
+    <div class="card full">
+      <h2>Action log</h2>
+      <div class="actions-log" id="actions-log">
+        <div class="action"><span>No actions yet</span></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const MAX_POINTS = 20;
+  const moistureData = [], tempData = [], labels = [];
+
+  const mChart = new Chart(document.getElementById('chart-moisture'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Moisture %', data: moistureData, borderColor: '#4ade80', backgroundColor: '#4ade8022', tension: 0.4, pointRadius: 2, fill: true }] },
+    options: { animation: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { color: '#555' }, grid: { color: '#222' } } } }
+  });
+
+  const tChart = new Chart(document.getElementById('chart-temp'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Temp °C', data: tempData, borderColor: '#f59e0b', backgroundColor: '#f59e0b22', tension: 0.4, pointRadius: 2, fill: true }] },
+    options: { animation: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { color: '#555' }, grid: { color: '#222' } } } }
+  });
+
+  function setSensor(id, value, unit, warn, danger) {
+    const el = document.getElementById(id);
+    const num = parseFloat(value);
+    el.querySelector('.sensor-value').innerHTML = num.toFixed(1) + `<span class="sensor-unit">${unit}</span>`;
+    el.className = 'sensor' + (num >= danger ? ' danger' : num >= warn ? ' warning' : '');
+  }
+
+  async function pollState() {
+    try {
+      const r = await fetch('/api/state');
+      const d = await r.json();
+      const t = new Date().toLocaleTimeString();
+      setSensor('s-moisture', d.moisture, '%', 80, 90);
+      setSensor('s-temp', d.temp, '°C', 30, 35);
+      setSensor('s-humidity', d.humidity, '%', 80, 90);
+      setSensor('s-light', d.light, 'lux', 850, 950);
+      labels.push(t); moistureData.push(d.moisture); tempData.push(d.temp);
+      if (labels.length > MAX_POINTS) { labels.shift(); moistureData.shift(); tempData.shift(); }
+      mChart.update(); tChart.update();
+    } catch(e) {}
+  }
+
+  async function pollDecision() {
+    try {
+      const r = await fetch('/api/decision');
+      const d = await r.json();
+      const el = document.getElementById('assessment');
+      const isRunning = d.status === 'running';
+
+      el.className = 'assessment' + (isRunning ? ' running' : '');
+      el.innerHTML = isRunning
+        ? `<span class="spinner"></span>${d.assessment}`
+        : (d.assessment || '');
+
+      document.getElementById('reasoning').textContent = d.reasoning || '';
+
+      // render actions_taken as pills
+      const at = document.getElementById('actions-taken');
+      if (d.actions_taken && d.actions_taken.length) {
+        at.innerHTML = d.actions_taken.map(a => {
+          const cls = a.startsWith('irrigation') ? 'irrigation' : a.startsWith('alert') ? 'alert' : '';
+          return `<span class="action-pill ${cls}">${a}</span>`;
+        }).join('');
+      } else {
+        at.innerHTML = '';
+      }
+
+      // refresh plant image on each completed cycle
+      if (!isRunning) {
+        document.getElementById('plant-img').src = '/api/image?t=' + Date.now();
+      }
+    } catch(e) {}
+  }
+
+  async function pollActions() {
+    try {
+      const r = await fetch('/api/actions');
+      const actions = await r.json();
+      const el = document.getElementById('actions-log');
+      if (!actions.length) return;
+      el.innerHTML = actions.reverse().map(a =>
+        `<div class="action ${a.type}">
+          <span><span class="type">${a.type}</span> — ${a.value} ${a.detail || ''}</span>
+          <span>${new Date(a.ts * 1000).toLocaleTimeString()}</span>
+        </div>`
+      ).join('');
+    } catch(e) {}
+  }
+
+  async function setScenario(name, btn) {
+    await fetch(`/api/scenario/${name}`);
+    document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // refresh image immediately on scenario change
+    setTimeout(() => {
+      document.getElementById('plant-img').src = '/api/image?t=' + Date.now();
+    }, 500);
+  }
+
+  pollState(); pollDecision(); pollActions();
+  setInterval(pollState, 5000);
+  setInterval(pollDecision, 8000);
+  setInterval(pollActions, 5000);
+</script>
+</body>
+</html>
