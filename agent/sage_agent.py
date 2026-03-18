@@ -103,6 +103,12 @@ def _parse_json(text: str) -> dict:
     end = text.rfind("}") + 1
     if start != -1 and end > start:
         text = text[start:end]
+    # handle case where LLM wraps answer in a tool call structure
+    if '"assessment"' not in text and '"parameters"' in text:
+        # extract the parameters object
+        params_match = re.search(r'"parameters"\s*:\s*(\{.*\})', text, re.DOTALL)
+        if params_match:
+            text = params_match.group(1)
     return json.loads(text)
 
 
